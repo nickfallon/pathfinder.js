@@ -1,0 +1,324 @@
+<html>
+  
+    <body>
+
+        <button onclick="makeMap();drawMap()" id="Button1">new maze</button>
+        <button onclick="go()" id="begin">find a route</button>
+        
+        <div style="float:left; font-family:monospace;letter-spacing:4px;font-size:14px;color:#333333" id="divmap"></div>
+
+        <div id="msg">Results</div>
+
+    </body>
+
+    <script>
+
+        //pathfinder genetic algorithm
+        //nick fallon 2014
+
+        var programs = [];
+
+        //generate map
+        var map = [];
+        var perside = 20;
+
+
+        function makeMap() {
+            var i = 0;
+            for (i = 0; i < perside; i++) {
+                map[i] = [];
+                for (var j = 0; j < perside; j++) {
+                    Math.random() > 0.3 ? map[i][j] = 0 : map[i][j] = 1;
+                }
+            }
+        }
+
+        makeMap();
+
+        //set start and end points
+        var start = new Point();
+        start.x = 19;
+        start.y = 19;
+        //start.randomise();
+        var end = new Point()
+        end.x = 0;
+        end.y = 0;
+        //end.randomise();
+
+        function Point(x, y) {
+            this.x = x;
+            this.y = y;
+        }
+        Point.prototype.randomise = function () {
+            this.x = Math.floor(Math.random() * perside);
+            this.y = Math.floor(Math.random() * perside);
+        }
+
+        function Program() {
+            this.step = [];
+            this.maxSteps = 80;
+        }
+        Program.prototype.initialise = function () {
+            for (var i = 0; i < this.maxSteps; i++) {
+                this.step[i] = Math.floor(Math.random() * 4);
+            }
+        }
+        Program.prototype.cross = function (other) {
+            var len = this.step.length;
+            var c1 = new Program();
+            var c2 = new Program();
+            var probability = 0.2;
+            var crossed = false;
+            for (var i = 0; i < len; i++) {
+                if (probability < Math.random()) crossed = !crossed;
+                if (crossed) {
+                    c1.step[i] = other.step[i];
+                    c2.step[i] = this.step[i];
+                }
+                else {
+                    c1.step[i] = this.step[i];
+                    c2.step[i] = other.step[i];
+                }
+            }
+            var children = [c1, c2];
+            return children;
+        }
+
+        Program.prototype.solve = function () {
+            var position = new Point(start.x, start.y);
+
+            for (var i = 0; i < this.maxSteps; i++) {
+                switch (this.step[i]) {
+                    case 0: //N
+                        if (position.x > 0) {
+                            if (map[position.x - 1][position.y] == 0) {
+                                position.x--;
+                            }
+                        }
+                        break;
+                    case 1: //E
+                        if (position.y < perside - 1) {
+                            if (map[position.x][position.y + 1] == 0) {
+                                position.y++;
+                            }
+                        }
+                        break;
+                    case 2: //S
+                        if (position.x < perside - 1) {
+                            if (map[position.x + 1][position.y] == 0) {
+                                position.x++;
+                            }
+                        }
+                        break;
+                    case 3: //W
+                        if (position.y > 0) {
+                            if (map[position.x][position.y - 1] == 0) {
+                                position.y--;
+                            }
+                        }
+                        break;
+                } //this step
+
+                //calc distance to end
+                var dx = position.x - end.x;
+                var dy = position.y - end.y;
+                var distance = Math.sqrt((dx * dx) + (dy * dy));
+                distance++;
+                //fitness approaches 1 as distance decreases.                
+                this.fitness = (1 / distance);
+                if (this.fitness == 1) {
+                    break;
+                }
+            } //all steps
+        }
+
+        function go() {
+
+            var d1 = window.performance.now();
+
+            var msgdiv = document.getElementById('msg');
+            
+            //create population generation 1
+            var popsize = 100;
+            programs = [];
+            var halfpopsize = Math.floor(popsize / 2);
+            for (i = 0; i < popsize; i++) {
+                var p = new Program();
+                p.initialise();
+                programs[programs.length] = p;
+            }
+
+            //for all iterations
+            var iterations = 120;
+            iteration_loop:
+                for (var i = 0; i < iterations; i++) {
+                    //solve current population
+                    var len = programs.length;
+                    var j = 0;
+                    for (j = 0; j < len; j++) {
+                        programs[j].solve();
+                        //check for a solution
+                        if (programs[j].fitness > 0.5) {
+                            console.log('solution found at generation ' + i);
+                            console.log(programs[j]);
+                            break iteration_loop;
+                        }
+                    }
+                    //sum total fitness
+                    var fitness_sum = 0;
+                    for (j = 0; j < len; j++) {
+                        fitness_sum = fitness_sum + programs[j].fitness;
+                    }
+                    //normalise fitness for all programs (so that summed fitnesses = 1)
+                    for (j = 0; j < len; j++) {
+                        programs[j].fitness = (programs[j].fitness / fitness_sum);
+                    }
+                    //build new population
+                    var newprograms = [];
+                    for (j = 0; j < halfpopsize; j++) {
+                        //select parents
+                        var p1 = select(Math.random());
+                        var p2 = select(Math.random());
+                        //generate children with crossover
+                        var children = p1.cross(p2);
+
+                        var c1 = children[0];
+                        var c2 = children[1];
+                        newprograms[newprograms.length] = c1;
+                        newprograms[newprograms.length] = c2;
+                    }
+                    //move new generation to current
+                    programs = newprograms;
+                }
+
+    
+            //solve last population
+            var len = programs.length;
+            var j = 0;
+            for (j = 0; j < len; j++) {
+                programs[j].solve();
+                //check for a solution
+                if (programs[j].fitness == 1) {
+                    console.log('solution found at generation ' + i);
+                    console.log(programs[j]);
+                    break;
+                }
+            }
+
+            var k = 0;
+
+            //find best fitness
+            var fittest = { fitness: 0 };
+            for (k = 0; k < popsize; k++) {
+                if (programs[k].fitness > fittest.fitness) {
+                    fittest = programs[k];
+                }
+            }
+
+            var d2 = window.performance.now();
+            var t = Math.floor((d2 - d1) * 1000) / 1000;
+
+            msgdiv.innerHTML = "generation: " + i + " fitness: " + fittest.fitness + " time: " + t + "ms";
+
+            
+
+            //clone the map for rendering
+            rendermap = [];
+            for (j = 0; j < perside; j++) {
+                rendermap[j] = [];
+                for (k = 0; k < perside; k++) {
+                    rendermap[j][k] = map[j][k];
+                }
+            }
+
+            //draw the fittest path to the map
+            len = fittest.step.length;
+            var cursor = new Point(start.x, start.y);
+            for (k = 0; k < len; k++) {
+                rendermap[cursor.x][cursor.y] = '*';
+                switch (fittest.step[k]) {
+                    case 0: //N
+                        if (cursor.x > 0) {
+                            if (map[cursor.x - 1][cursor.y] == 0) {
+                                cursor.x--;
+                            }
+                        }
+                        break;
+                    case 1: //E
+                        if (cursor.y < perside - 1) {
+                            if (map[cursor.x][cursor.y + 1] == 0) {
+                                cursor.y++;
+                            }
+                        }
+                        break;
+                    case 2: //S
+                        if (cursor.x < perside - 1) {
+                            if (map[cursor.x + 1][cursor.y] == 0) {
+                                cursor.x++;
+                            }
+                        }
+                        break;
+                    case 3: //W
+                        if (cursor.y > 0) {
+                            if (map[cursor.x][cursor.y - 1] == 0) {
+                                cursor.y--;
+                            }
+                        }
+                        break;
+                }
+            }
+
+            //draw start/end points
+            rendermap[start.x][start.y] = 's';
+            rendermap[end.x][end.y] = 'e';
+
+            //render the map
+            var text = '';
+            for (var m = 0; m < perside; m++) {
+                for (var n = 0; n < perside; n++) {
+                    text = text + rendermap[m][n];
+                }
+                text = text + '<br>';
+            }
+            var divmap = document.getElementById('divmap');
+            divmap.innerHTML = text;
+
+        }
+
+        function drawMap() {
+            //clone the map for rendering
+            rendermap = [];
+            for (j = 0; j < perside; j++) {
+                rendermap[j] = [];
+                for (k = 0; k < perside; k++) {
+                    rendermap[j][k] = map[j][k];
+                }
+            }
+            //render the map
+            var text = '';
+            for (var m = 0; m < perside; m++) {
+                for (var n = 0; n < perside; n++) {
+                    text = text + rendermap[m][n];
+                }
+                text = text + '<br>';
+            }
+            var divmap = document.getElementById('divmap');
+            divmap.innerHTML = text;
+
+        }
+
+        function select(x) {
+            //roulette selection
+            var len = programs.length;
+            var selection_sum = 0;
+            for (i = 0; i < len; i++) {
+                selection_sum = selection_sum + programs[i].fitness;
+                if (x <= selection_sum) {
+                    return programs[i];
+                }
+            }
+        }
+
+  </script>
+
+</html>
