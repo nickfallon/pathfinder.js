@@ -1,4 +1,4 @@
 # pathfinder.js
 Pathfinder genetic algorithm in javascript.
 ---
-Given a 2D map containing obstacles, a start position and a target (exit) position, pathfinder attempts to discover a route through the map using a genetic algorithm. 
+Javascript demo - Given a 2D map containing obstacles, a start position and a target (exit) position, pathfinder attempts to discover a route through the map using a genetic algorithm. 
